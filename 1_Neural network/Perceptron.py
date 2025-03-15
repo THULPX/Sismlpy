@@ -4,9 +4,9 @@ import numpy as np
 # ----------------------------- 感知机（Perceptron）算法 -----------------------------
 
 # 介绍：
-# 感知机（Perceptron）是最简单的线性分类模型之一，通常用于二分类问题。感知机通过
-# 加权和的方式，将输入特征映射到一个线性空间，并通过激活函数（通常为阶跃函数）来
-# 预测类别。感知机模型的目标是通过不断调整权重和偏置，使得所有训练样本能够被正确分类。
+# 感知机（Perceptron）是最简单的线性分类模型之一，通常用于二分类问题。
+# 感知机通过加权和的方式，将输入特征映射到一个线性空间，并通过激活函数来预测类别。
+# 感知机模型的目标是通过不断调整权重和偏置，使得所有训练样本能够被正确分类。
 
 # 输入输出：
 # 输入：
@@ -28,7 +28,7 @@ import numpy as np
 # - max_iter：最大迭代次数，用于控制训练过程的最大轮数。
 
 class Perceptron:
-    def __init__(self, learning_rate=0.01, max_iter=1000):
+    def __init__(self, learning_rate=0.01, max_iter=10000):
         """
         初始化感知机模型。
 
@@ -53,7 +53,7 @@ class Perceptron:
         self.bias = 0
 
         # 迭代训练
-        for _ in range(self.max_iter):
+        for epoch in range(self.max_iter):
             # 标志位：是否本次迭代更新了权重
             updated = False
             for i in range(n_samples):
@@ -69,7 +69,13 @@ class Perceptron:
 
             # 如果本轮没有更新权重，说明模型已经收敛，提前终止
             if not updated:
+                print(f"模型在第{epoch + 1}轮收敛")
                 break
+
+            # 每1000次迭代打印一次模型状态
+            if epoch % 1000 == 0:
+                accuracy = self.score(X, y)
+                print(f"第{epoch + 1}轮 - 权重: {self.weights}, 偏置: {self.bias}, 准确率: {accuracy * 100:.2f}%")
 
     def predict(self, X):
         """
@@ -118,11 +124,11 @@ if __name__ == "__main__":
     # 生成一个简单的线性可分数据集
     from sklearn.datasets import make_classification
 
-    X, y = make_classification(n_samples=100, n_features=2, n_informative=2, n_redundant=0, n_clusters_per_class=1)
+    X, y = make_classification(n_samples=1000, n_features=2, n_informative=2, n_redundant=0, n_clusters_per_class=1)
     y = 2 * y - 1  # 将标签转换为 -1 和 1
 
     # 训练感知机模型
-    perceptron = Perceptron(learning_rate=0.1, max_iter=1000)
+    perceptron = Perceptron(learning_rate=0.1, max_iter=10000)
     perceptron.fit(X, y)
 
     # 测试模型
