@@ -1,7 +1,9 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_classification
+from sklearn.neural_network import MLPClassifier
 
-
-# ----------------------------- 多层感知机（MLP）算法 -----------------------------
+# -------------------------- 多层感知机（MLP）算法 --------------------------
 
 # 介绍：
 # 多层感知机（MLP）是一个前馈神经网络，包括输入层、一个或多个隐藏层和输出层。
@@ -28,7 +30,7 @@ import numpy as np
 # - hidden_layers：一个或多个隐藏层的神经元数量。
 
 class MLP:
-    def __init__(self, hidden_layers=[10], learning_rate=0.01, max_iter=1000, activation='relu',
+    def __init__(self, hidden_layers=[5], learning_rate=0.01, max_iter=5000, activation='relu',
                  output_activation='softmax'):
         """
         初始化多层感知机模型。
@@ -46,6 +48,7 @@ class MLP:
         self.output_activation = output_activation
         self.weights = []
         self.biases = []
+        self.losses = []
 
     def _initialize_weights(self, input_dim, output_dim):
         """
@@ -127,14 +130,14 @@ class MLP:
         :param y: 真实标签。
         """
         m = X.shape[0]
-        dz = activations[-1] - y  # 输出层误差
+        dz = activations[-1] - y
         dw = np.dot(activations[-2].T, dz) / m
         db = np.sum(dz, axis=0, keepdims=True) / m
         self.weights[-1] -= self.learning_rate * dw
         self.biases[-1] -= self.learning_rate * db
 
         for i in range(len(self.weights) - 2, -1, -1):
-            dz = np.dot(dz, self.weights[i + 1].T) * (activations[i + 1] > 0)  # ReLU的导数
+            dz = np.dot(dz, self.weights[i + 1].T) * (activations[i + 1] > 0)
             dw = np.dot(activations[i].T, dz) / m
             db = np.sum(dz, axis=0, keepdims=True) / m
             self.weights[i] -= self.learning_rate * dw
@@ -153,6 +156,8 @@ class MLP:
 
         for _ in range(self.max_iter):
             activations = self._forward(X)
+            loss = self._compute_loss(activations[-1], y)
+            self.losses.append(loss)
             self._backward(activations, X, y)
 
     def predict(self, X):
@@ -181,16 +186,42 @@ class MLP:
 
 # 示例：使用MLP进行训练
 if __name__ == "__main__":
-    # 生成一个简单的分类数据集
-    from sklearn.datasets import make_classification
-
-    X, y = make_classification(n_samples=100, n_features=2, n_informative=2, n_redundant=0, n_classes=3)
+    # 生成一个稍微复杂的分类数据集，增加特征和类别
+    X, y = make_classification(n_samples=500, n_features=3, n_informative=3, n_redundant=0, n_classes=3,
+                               n_clusters_per_class=1, random_state=42)
     y = np.eye(3)[y]  # 转换为one-hot编码
 
-    # 创建MLP模型并训练
-    mlp = MLP(hidden_layers=[10, 5], learning_rate=0.01, max_iter=1000, activation='relu', output_activation='softmax')
+    # 创建MLP模型并训练，增加了更多的隐藏层和节点
+    mlp = MLPClassifier(hidden_layer_sizes=(10, 10), learning_rate_init=0.01, max_iter=10000, activation='relu', solver='adam')
     mlp.fit(X, y)
 
-    # 测试模型
+    # 打印训练后的权重和偏置
+    print("训练后的权重和偏置：")
+    for i, (weight, bias) in enumerate(zip(mlp.coefs_, mlp.intercepts_)):
+        print(f"层 {i + 1} - 权重形状: {weight.shape}, 偏置形状: {bias.shape}")
+
+    # 训练集准确率
     accuracy = mlp.score(X, y)
     print(f"训练集上的准确率: {accuracy * 100:.2f}%")
+
+    # 绘制损失曲线
+    plt.plot(mlp.loss_curve_)
+    plt.title("Loss Curve")
+    plt.xlabel("Iteration")
+    plt.ylabel("Loss")
+    plt.show()
+
+    # 绘制决策边界
+    h = .02
+    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+
+    Z = mlp.predict(np.c_[xx.ravel(), yy.ravel(), np.zeros(xx.ravel().shape)])  # 三维数据，填充Z轴为0
+    Z = np.argmax(Z, axis=1)
+    Z = Z.reshape(xx.shape)
+
+    plt.contourf(xx, yy, Z, alpha=0.8)
+    plt.scatter(X[:, 0], X[:, 1], c=np.argmax(y, axis=1), edgecolors='k', marker='o', s=50, cmap=plt.cm.RdYlBu)
+    plt.title("Decision Boundary")
+    plt.show()
