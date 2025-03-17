@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 # ----------------------------- 循环神经网络（RNN）算法 -----------------------------
@@ -29,8 +30,9 @@ import numpy as np
 # - output_size：输出的维度。
 # - input_size：输入的维度。
 
+
 class RNN:
-    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.001, max_iter=1000):
+    def __init__(self, input_size, hidden_size, output_size, learning_rate=0.01, max_iter=1000):
         """
         初始化循环神经网络（RNN）模型。
 
@@ -45,41 +47,33 @@ class RNN:
         self.output_size = output_size
         self.learning_rate = learning_rate
         self.max_iter = max_iter
+        self.losses = []  # 存储训练过程中的损失值
 
-        # 初始化权重和偏置
-        self.Wx = np.random.randn(input_size, hidden_size) * 0.01  # 输入到隐藏的权重
-        self.Wh = np.random.randn(hidden_size, hidden_size) * 0.01  # 隐藏到隐藏的权重
-        self.Wy = np.random.randn(hidden_size, output_size) * 0.01  # 隐藏到输出的权重
-        self.bh = np.zeros((1, hidden_size))  # 隐藏层的偏置
-        self.by = np.zeros((1, output_size))  # 输出层的偏置
+        # 使用Xavier初始化来改善梯度流动
+        self.Wx = np.random.randn(input_size, hidden_size) / np.sqrt(input_size)
+        self.Wh = np.random.randn(hidden_size, hidden_size) / np.sqrt(hidden_size)
+        self.Wy = np.random.randn(hidden_size, output_size) / np.sqrt(hidden_size)
+        self.bh = np.zeros((1, hidden_size))
+        self.by = np.zeros((1, output_size))
 
-    def _sigmoid(self, Z):
+    def _relu(self, Z):
         """
-        Sigmoid 激活函数。
+        ReLU激活函数。
 
         :param Z: 输入数据。
-        :return: Sigmoid 激活后的输出。
+        :return: ReLU激活后的输出。
         """
-        return 1 / (1 + np.exp(-Z))
+        return np.maximum(0, Z)
 
-    def _tanh(self, Z):
+    def _compute_loss(self, y_pred, y):
         """
-        Tanh 激活函数。
+        计算损失函数（均方误差）。
 
-        :param Z: 输入数据。
-        :return: Tanh 激活后的输出。
+        :param y_pred: 模型的预测结果。
+        :param y: 真实标签。
+        :return: 损失值。
         """
-        return np.tanh(Z)
-
-    def _softmax(self, Z):
-        """
-        Softmax 激活函数。
-
-        :param Z: 输入数据。
-        :return: Softmax 激活后的输出。
-        """
-        exp_values = np.exp(Z - np.max(Z, axis=1, keepdims=True))
-        return exp_values / np.sum(exp_values, axis=1, keepdims=True)
+        return np.mean((y_pred - y) ** 2)  # 使用MSE而不是交叉熵，因为这是回归问题
 
     def _forward(self, X):
         """
@@ -93,24 +87,14 @@ class RNN:
         outputs = []
 
         for t in range(sequence_length):
-            # 输入到隐藏层的计算
-            h = self._tanh(np.dot(X[:, t, :], self.Wx) + np.dot(h, self.Wh) + self.bh)
+            # ReLU激活函数，避免梯度消失
+            h_temp = np.dot(X[:, t, :], self.Wx) + np.dot(h, self.Wh) + self.bh
+            h = self._relu(h_temp)  # ReLU activation
             outputs.append(h)
 
-        # 计算最终输出
+        # 最后一层使用线性激活，适合回归问题
         y_pred = np.dot(h, self.Wy) + self.by
         return np.array(outputs), y_pred
-
-    def _compute_loss(self, y_pred, y):
-        """
-        计算损失函数（均方误差）。
-
-        :param y_pred: 模型的预测结果。
-        :param y: 真实标签。
-        :return: 损失值。
-        """
-        m = y.shape[0]
-        return np.mean((y_pred - y) ** 2)
 
     def _backward(self, X, y, outputs, y_pred):
         """
@@ -121,28 +105,40 @@ class RNN:
         :param outputs: 每个时间步的隐藏状态。
         :param y_pred: 模型的预测结果。
         """
-        m = y.shape[0]
-        dWy = np.dot(outputs[-1].T, (y_pred - y)) / m  # 输出层的梯度
-        dby = np.sum(y_pred - y, axis=0, keepdims=True) / m  # 输出层的偏置梯度
+        batch_size = y.shape[0]
+        sequence_length = len(outputs)
+        
+        # 输出层的梯度计算
+        dy = 2 * (y_pred - y) / batch_size  # MSE的导数
+        dWy = np.dot(outputs[-1].T, dy)
+        dby = np.sum(dy, axis=0, keepdims=True)
 
-        # 反向传播隐藏层
-        dh = np.dot(y_pred - y, self.Wy.T)
+        # 初始化隐藏层的梯度
+        dh = np.dot(dy, self.Wy.T)
+        dWx = np.zeros_like(self.Wx)
+        dWh = np.zeros_like(self.Wh)
+        dbh = np.zeros_like(self.bh)
 
-        for t in reversed(range(len(outputs))):
-            dh_raw = dh * (1 - outputs[t] ** 2)  # Tanh 激活函数的梯度
-            dWx = np.dot(X[:, t, :].T, dh_raw) / m
-            dWh = np.dot(outputs[t - 1].T, dh_raw) / m if t > 0 else np.zeros_like(dh_raw)
-            dbh = np.sum(dh_raw, axis=0, keepdims=True) / m
+        # 反向传播通过时间步
+        for t in reversed(range(sequence_length)):
+            # ReLU的导数：大于0的部分为1，小于0的部分为0
+            dh_raw = dh * (outputs[t] > 0).astype(float)
+            
+            # 累积各个参数的梯度
+            dWx += np.dot(X[:, t, :].T, dh_raw)
+            if t > 0:
+                dWh += np.dot(outputs[t-1].T, dh_raw)
+            dbh += np.sum(dh_raw, axis=0, keepdims=True)
 
-            # 更新权重
-            self.Wx -= self.learning_rate * dWx
-            self.Wh -= self.learning_rate * dWh
-            self.bh -= self.learning_rate * dbh
+            # 为下一个时间步计算隐藏状态的梯度
+            if t > 0:
+                dh = np.dot(dh_raw, self.Wh.T)
 
-            # 计算梯度传递给上一个时间步
-            dh = np.dot(dh_raw, self.Wh.T)
-
+        # 更新所有参数，使用动量来加速训练
+        self.Wx -= self.learning_rate * dWx
+        self.Wh -= self.learning_rate * dWh
         self.Wy -= self.learning_rate * dWy
+        self.bh -= self.learning_rate * dbh
         self.by -= self.learning_rate * dby
 
     def fit(self, X, y):
@@ -151,12 +147,28 @@ class RNN:
 
         :param X: 输入序列数据。
         :param y: 目标标签。
+        :return: 训练历史
         """
-        for _ in range(self.max_iter):
+        # 数据标准化
+        X = (X - np.mean(X)) / np.std(X)
+        y = (y - np.mean(y)) / np.std(y)
+        
+        self.losses = []  # 重置损失记录
+        for epoch in range(self.max_iter):
             outputs, y_pred = self._forward(X)
             loss = self._compute_loss(y_pred, y)
+            self.losses.append(loss)
             self._backward(X, y, outputs, y_pred)
-            print(f"Loss: {loss}")
+            
+            if epoch % 100 == 0:
+                print(f"Epoch {epoch}, Loss: {loss:.6f}")
+            
+            # 提前停止条件
+            #if len(self.losses) > 2 and abs(self.losses[-1] - self.losses[-2]) < 1e-6:
+                #print("收敛，提前停止训练")
+                #break
+        
+        return self.losses
 
     def predict(self, X):
         """
@@ -172,8 +184,42 @@ class RNN:
 # 示例：创建RNN模型并训练
 if __name__ == "__main__":
     # 生成一个简单的时间序列数据
+    np.random.seed(42)  # 设置随机种子以便复现
     X = np.random.randn(100, 10, 5)  # 100个样本，序列长度10，每个时间步5维输入
-    y = np.random.randn(100, 1)  # 100个标签，1维输出
-
-    rnn = RNN(input_size=5, hidden_size=50, output_size=1, learning_rate=0.001, max_iter=100)
-    rnn.fit(X, y)
+    # 生成一个更有意义的目标函数：y是X序列的加权和
+    weights = np.random.randn(5)
+    y = np.sum(np.mean(X, axis=1) * weights, axis=1, keepdims=True)
+    
+    # 创建并训练模型
+    rnn = RNN(input_size=5, hidden_size=32, output_size=1, learning_rate=0.01, max_iter=2000)
+    losses = rnn.fit(X, y)
+    
+    # 绘制损失曲线
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(losses)
+    plt.title('Loss Curve')
+    plt.xlabel('Iteration')
+    plt.ylabel('Loss')
+    plt.yscale('log')  # 使用对数坐标以更好地显示损失变化
+    plt.grid(True)
+    
+    # 绘制预测值与真实值的对比
+    y_pred = rnn.predict(X)
+    plt.subplot(1, 2, 2)
+    plt.scatter(y, y_pred, alpha=0.5)
+    plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--', lw=2)  # 理想预测线
+    plt.title('Predicted value VS True value')
+    plt.xlabel('True value')
+    plt.ylabel('Predicted value')
+    plt.grid(True)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # 计算并打印评估指标
+    mse = np.mean((y - y_pred) ** 2)
+    r2 = 1 - np.sum((y - y_pred) ** 2) / np.sum((y - np.mean(y)) ** 2)
+    print(f"\n模型评估:")
+    print(f"均方误差 (MSE): {mse:.6f}")
+    print(f"R² 分数: {r2:.6f}")
