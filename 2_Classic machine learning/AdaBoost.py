@@ -1,15 +1,13 @@
 import numpy as np
-from sklearn import datasets
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import AdaBoostClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+from sklearn.ensemble import AdaBoostRegressor
+from sklearn.tree import DecisionTreeRegressor
 
 # ----------------------------- AdaBoost 算法 -----------------------------
 
 # 介绍：
-# AdaBoost（Adaptive Boosting）是一种提升方法，它通过组合多个弱分类器（通常是浅层决策树）来构建一个强分类器。
+# AdaBoost（Adaptive Boosting）是一种集成学习方法，旨在通过结合多个弱学习器来构建一个强学习器。
+# 核心思想:通过反复训练一系列弱学习器，每一轮训练时都着重关注之前学习器未正确分类的数据。
 # 在每一轮迭代中，AdaBoost会调整每个样本的权重，重点关注那些被前一轮分类器错误分类的样本。
 # 通过不断优化模型的错误，最终实现强大的预测能力。AdaBoost能有效减少过拟合，尤其在小数据集上表现良好。
 
@@ -34,82 +32,41 @@ from sklearn.metrics import accuracy_score
 # - base_estimator: 基学习器，通常是浅层决策树。
 # - algorithm: 使用的提升算法（SAMME 或 SAMME.R）。
 
-class AdaBoostModel:
-    def __init__(self, n_estimators=50, learning_rate=1.0, base_estimator=None):
-        """
-        初始化 AdaBoost 模型。
+# 生成多项式数据
+np.random.seed(42)
+X = np.random.rand(500) * 10
+y = np.sin(X) + np.random.normal(0, 0.5, 500)
 
-        :param n_estimators: 弱分类器的数量。
-        :param learning_rate: 每个弱分类器的权重缩放因子。
-        :param base_estimator: 基学习器，通常是浅层决策树。
-        """
-        self.n_estimators = n_estimators
-        self.learning_rate = learning_rate
-        self.base_estimator = base_estimator if base_estimator else DecisionTreeClassifier(max_depth=1)
-        self.model = None
+# 将数据转换成二维数组
+X = X[:, np.newaxis]
 
-    def fit(self, X_train, y_train):
-        """
-        训练 AdaBoost 模型。
+# 定义基学习器
+base_regressor = DecisionTreeRegressor(max_depth=4)
 
-        :param X_train: 训练数据的特征。
-        :param y_train: 训练数据的标签。
-        """
-        # 标准化数据
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
+# 定义AdaBoost回归器
+regr_1 = AdaBoostRegressor(base_regressor, n_estimators=10, random_state=42)
+regr_2 = AdaBoostRegressor(base_regressor, n_estimators=20, random_state=42)
+regr_3 = AdaBoostRegressor(base_regressor, n_estimators=100, random_state=42)
 
-        # 初始化并训练 AdaBoost 模型
-        self.model = AdaBoostClassifier(base_estimator=self.base_estimator,
-                                        n_estimators=self.n_estimators,
-                                        learning_rate=self.learning_rate)
-        self.model.fit(X_train, y_train)
-        print("Model trained successfully.")
+# 训练模型
+regr_1.fit(X, y)
+regr_2.fit(X, y)
+regr_3.fit(X, y)
 
-    def predict(self, X_test):
-        """
-        使用训练好的 AdaBoost 模型进行预测。
+# 生成预测结果
+X_test = np.linspace(0, 10, 500)[:, np.newaxis]
+y_1 = regr_1.predict(X_test)
+y_2 = regr_2.predict(X_test)
+y_3 = regr_3.predict(X_test)
 
-        :param X_test: 测试数据的特征。
-        :return: 预测结果。
-        """
-        # 标准化数据
-        scaler = StandardScaler()
-        X_test = scaler.fit_transform(X_test)
-
-        # 使用训练好的模型进行预测
-        predictions = self.model.predict(X_test)
-        return predictions
-
-    def evaluate(self, X_test, y_test):
-        """
-        评估模型的性能。
-
-        :param X_test: 测试数据的特征。
-        :param y_test: 测试数据的标签。
-        :return: 模型准确率。
-        """
-        predictions = self.predict(X_test)
-        accuracy = accuracy_score(y_test, predictions)
-        print(f"Model accuracy: {accuracy * 100:.2f}%")
-        return accuracy
-
-
-# 示例：使用鸢尾花数据集进行训练和评估
-if __name__ == "__main__":
-    # 加载鸢尾花数据集
-    iris = datasets.load_iris()
-    X = iris.data
-    y = iris.target
-
-    # 划分训练集和测试集
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-    # 创建 AdaBoost 模型
-    adaboost_model = AdaBoostModel(n_estimators=50, learning_rate=1.0)
-
-    # 训练 AdaBoost 模型
-    adaboost_model.fit(X_train, y_train)
-
-    # 评估模型
-    adaboost_model.evaluate(X_test, y_test)
+# 绘制结果
+plt.figure(figsize=(10, 6))
+plt.scatter(X, y, c='b', label='Training samples')
+plt.plot(X_test, y_1, c='r', label='n_estimators=10', linewidth=2)
+plt.plot(X_test, y_2, c='g', label='n_estimators=20', linewidth=2)
+plt.plot(X_test, y_3, c='y', label='n_estimators=100', linewidth=2)
+plt.xlabel('Data')
+plt.ylabel('Target')
+plt.title('AdaBoost Regression with Polynomial Features')
+plt.legend()
+plt.show()
