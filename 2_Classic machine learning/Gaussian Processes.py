@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -9,8 +10,9 @@ from sklearn.metrics import mean_squared_error, r2_score
 # ----------------------------- Gaussian Processes (高斯过程) 算法 -----------------------------
 
 # 介绍：
-# 高斯过程回归（Gaussian Process Regression，GPR）是一种基于贝叶斯理论的非参数回归方法。与传统的回归方法不同，高斯过程回归不对模型进行假设（例如线性关系），
-# 而是通过样本点之间的协方差来进行建模。在高斯过程中，每一个训练样本都看作是从某个潜在的高斯分布中采样而来，因此它能够在给定训练数据的情况下，输出一个关于预测值的不确定性估计。
+# 高斯过程回归（Gaussian Process Regression，GPR）是一种基于贝叶斯理论的非参数回归方法。
+# 与传统的回归方法不同，高斯过程回归不对模型进行假设（例如线性关系），而是通过样本点之间的协方差来进行建模。
+# 每一个训练样本都看作是从某个潜在的高斯分布中采样而来，因此能够在给定训练数据的情况下，输出一个关于预测值的不确定性估计。
 # 高斯过程回归特别适用于当数据量较小并且存在较强非线性关系的场景。
 
 # 输入输出：
@@ -31,6 +33,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 # - kernel: 高斯过程的核函数，默认为 RBF 核。
 # - alpha: 噪声的方差，默认为1e-10。
 # - n_restarts_optimizer: 优化器的重启次数，默认为10。
+
 
 class GaussianProcessModel:
     def __init__(self, kernel=None, alpha=1e-10, n_restarts_optimizer=10):
@@ -90,15 +93,37 @@ class GaussianProcessModel:
 
         print(f"Model Mean Squared Error (MSE): {mse:.2f}")
         print(f"Model R-squared (R²): {r2:.2f}")
+
+        # 可视化预测效果
+        plt.figure(figsize=(10, 6))
+
+        # 绘制预测值与真实值的对比图
+        plt.subplot(1, 2, 1)
+        plt.scatter(y_test, predictions)
+        plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], 'k--', lw=2)
+        plt.title('Prediction vs True Values')
+        plt.xlabel('True Values')
+        plt.ylabel('Predictions')
+
+        # 绘制预测误差分布图
+        plt.subplot(1, 2, 2)
+        plt.hist(predictions - y_test, bins=30, edgecolor='black')
+        plt.title('Prediction Error Distribution')
+        plt.xlabel('Prediction Error')
+        plt.ylabel('Frequency')
+
+        plt.tight_layout()
+        plt.show()
+
         return mse, r2
 
 
-# 示例：使用波士顿房价数据集进行训练和评估
+# 示例：使用加利福尼亚房价数据集进行训练和评估
 if __name__ == "__main__":
-    # 加载波士顿房价数据集
-    boston = datasets.load_boston()
-    X = boston.data
-    y = boston.target
+    # 加载加利福尼亚房价数据集
+    california = datasets.fetch_california_housing()
+    X = california.data
+    y = california.target
 
     # 划分训练集和测试集
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
