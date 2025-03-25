@@ -1,5 +1,6 @@
 import numpy as np
-from sklearn import datasets
+import matplotlib.pyplot as plt
+from sklearn.datasets import fetch_california_housing
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import Lasso
 from sklearn.preprocessing import StandardScaler
@@ -9,9 +10,10 @@ from sklearn.metrics import mean_squared_error, r2_score
 # ----------------------------- Lasso Regression 算法 -----------------------------
 
 # 介绍：
-# Lasso回归（Least Absolute Shrinkage and Selection Operator）是一种带有L1正则化项的线性回归方法。Lasso回归通过加入L1正则化项来控制模型复杂度，
-# 并且能够自动进行特征选择。L1正则化的作用是惩罚回归系数的绝对值，从而使一些系数变为零。通过这种方式，Lasso回归在回归分析中可以自动选择对预测有影响的特征，
-# 从而简化模型并减少过拟合。
+# Lasso回归（Least Absolute Shrinkage and Selection Operator）是一种带有L1正则化项的线性回归方法。
+# Lasso回归通过加入L1正则化项来控制模型复杂度，并且能够自动进行特征选择。
+# L1正则化的作用是惩罚回归系数的绝对值，从而使一些系数变为零。
+# 通过这种方式，Lasso回归在回归分析中可以自动选择对预测有影响的特征，从而简化模型并减少过拟合。
 
 # 输入输出：
 # 输入：
@@ -32,90 +34,71 @@ from sklearn.metrics import mean_squared_error, r2_score
 # - normalize: 是否在回归之前对数据进行标准化，默认为False。
 # - max_iter: 最大迭代次数，默认为1000。
 
-class LassoRegressionModel:
-    def __init__(self, alpha=1.0, fit_intercept=True, normalize=False, max_iter=1000):
-        """
-        初始化 Lasso 回归模型。
 
-        :param alpha: 正则化强度，默认为1.0。
-        :param fit_intercept: 是否计算截距项b，默认为True。
-        :param normalize: 是否对数据进行标准化，默认为False。
-        :param max_iter: 最大迭代次数，默认为1000。
-        """
+class LassoRegressionModel:
+    def __init__(self, alpha=1.0, fit_intercept=True, max_iter=1000):
         self.alpha = alpha
         self.fit_intercept = fit_intercept
-        self.normalize = normalize
         self.max_iter = max_iter
         self.model = None
+        self.scaler = StandardScaler()
 
     def fit(self, X_train, y_train):
-        """
-        训练 Lasso 回归模型。
-
-        :param X_train: 训练数据的特征。
-        :param y_train: 训练数据的目标变量。
-        """
-        # 标准化数据
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-
-        # 初始化并训练 Lasso 回归模型
-        self.model = Lasso(alpha=self.alpha, fit_intercept=self.fit_intercept, normalize=self.normalize,
-                           max_iter=self.max_iter)
-        self.model.fit(X_train, y_train)
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        self.model = Lasso(alpha=self.alpha, fit_intercept=self.fit_intercept,
+                           max_iter=self.max_iter, warm_start=True)
+        self.model.fit(X_train_scaled, y_train)
+        self.X_train_scaled = X_train_scaled
+        self.y_train = y_train
         print("Model trained successfully.")
 
     def predict(self, X_test):
-        """
-        使用训练好的 Lasso 回归模型进行预测。
-
-        :param X_test: 测试数据的特征。
-        :return: 预测结果。
-        """
-        # 标准化数据
-        scaler = StandardScaler()
-        X_test = scaler.fit_transform(X_test)
-
-        # 使用训练好的模型进行预测
-        predictions = self.model.predict(X_test)
-        return predictions
+        X_test_scaled = self.scaler.transform(X_test)
+        return self.model.predict(X_test_scaled)
 
     def evaluate(self, X_test, y_test):
-        """
-        评估模型的性能。
-
-        :param X_test: 测试数据的特征。
-        :param y_test: 测试数据的目标变量。
-        :return: 模型的评估指标，如均方误差(MSE)和R²。
-        """
         predictions = self.predict(X_test)
-
-        # 计算均方误差(MSE)
         mse = mean_squared_error(y_test, predictions)
-
-        # 计算R²值
         r2 = r2_score(y_test, predictions)
-
         print(f"Model Mean Squared Error (MSE): {mse:.2f}")
         print(f"Model R-squared (R²): {r2:.2f}")
-        return mse, r2
+        return predictions, mse, r2
+
+    def plot_prediction_vs_actual(self, y_test, predictions):
+        plt.figure(figsize=(6, 6))
+        plt.scatter(y_test, predictions, alpha=0.5)
+        plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+        plt.xlabel("Actual Values")
+        plt.ylabel("Predicted Values")
+        plt.title("Lasso Regression: Predicted vs Actual")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_feature_weights(self, feature_names):
+        plt.figure(figsize=(10, 5))
+        plt.bar(feature_names, self.model.coef_)
+        plt.xticks(rotation=45, ha='right')
+        plt.xlabel("Feature")
+        plt.ylabel("Weight")
+        plt.title("Lasso Feature Weights")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
 
 
-# 示例：使用波士顿房价数据集进行训练和评估
+# 示例：使用 California housing 数据集
 if __name__ == "__main__":
-    # 加载波士顿房价数据集
-    boston = datasets.load_boston()
-    X = boston.data
-    y = boston.target
+    housing = fetch_california_housing()
+    X = housing.data
+    y = housing.target
+    feature_names = housing.feature_names
 
-    # 划分训练集和测试集
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-    # 创建 Lasso 回归模型
-    lasso_model = LassoRegressionModel(alpha=1.0, fit_intercept=True, normalize=True)
-
-    # 训练 Lasso 回归模型
+    lasso_model = LassoRegressionModel(alpha=0.01, fit_intercept=True)
     lasso_model.fit(X_train, y_train)
 
-    # 评估模型
-    lasso_model.evaluate(X_test, y_test)
+    predictions, mse, r2 = lasso_model.evaluate(X_test, y_test)
+    lasso_model.plot_prediction_vs_actual(y_test, predictions)
+    lasso_model.plot_feature_weights(feature_names)
