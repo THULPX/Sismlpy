@@ -1,9 +1,11 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-
+from sklearn.decomposition import PCA
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # ----------------------------- 随机森林（Random Forests）算法 -----------------------------
 
@@ -35,72 +37,78 @@ from sklearn.preprocessing import StandardScaler
 
 class RandomForestModel:
     def __init__(self, n_estimators=100, max_depth=None, min_samples_split=2, min_samples_leaf=1, max_features='sqrt'):
-        """
-        初始化随机森林（Random Forest）模型。
-
-        :param n_estimators: 森林中树的数量。
-        :param max_depth: 每棵树的最大深度。
-        :param min_samples_split: 内部节点再划分所需的最小样本数。
-        :param min_samples_leaf: 叶子节点的最小样本数。
-        :param max_features: 每次分裂时选择的最大特征数。
-        """
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
         self.max_features = max_features
         self.model = None
+        self.scaler = StandardScaler()
 
     def fit(self, X_train, y_train):
-        """
-        训练随机森林模型。
-
-        :param X_train: 训练数据的特征。
-        :param y_train: 训练数据的标签。
-        """
-        # 标准化数据
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-
-        # 初始化并训练随机森林模型
-        self.model = RandomForestClassifier(n_estimators=self.n_estimators,
-                                            max_depth=self.max_depth,
-                                            min_samples_split=self.min_samples_split,
-                                            min_samples_leaf=self.min_samples_leaf,
-                                            max_features=self.max_features)
+        X_train = self.scaler.fit_transform(X_train)
+        self.model = RandomForestClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            min_samples_split=self.min_samples_split,
+            min_samples_leaf=self.min_samples_leaf,
+            max_features=self.max_features
+        )
         self.model.fit(X_train, y_train)
         print("Model trained successfully.")
 
     def predict(self, X_test):
-        """
-        使用训练好的随机森林模型进行预测。
+        X_test = self.scaler.transform(X_test)
+        return self.model.predict(X_test)
 
-        :param X_test: 测试数据的特征。
-        :return: 预测结果。
-        """
-        # 标准化数据
-        scaler = StandardScaler()
-        X_test = scaler.fit_transform(X_test)
-
-        # 使用训练好的模型进行预测
-        predictions = self.model.predict(X_test)
-        return predictions
-
-    def evaluate(self, X_test, y_test):
-        """
-        评估模型的性能。
-
-        :param X_test: 测试数据的特征。
-        :param y_test: 测试数据的标签。
-        :return: 模型准确率。
-        """
+    def evaluate(self, X_test, y_test, target_names=None):
         predictions = self.predict(X_test)
         accuracy = np.mean(predictions == y_test)
         print(f"Model accuracy: {accuracy * 100:.2f}%")
+
+        # 可视化特征重要性
+        self.plot_feature_importance()
+
+        # 可视化PCA预测 vs 真实标签
+        self.plot_pca_results(X_test, y_test, predictions)
+
+        # 可视化混淆矩阵
+        if target_names is not None:
+            self.plot_confusion_matrix(y_test, predictions, target_names)
+
         return accuracy
 
+    def plot_feature_importance(self):
+        importances = self.model.feature_importances_
+        indices = np.argsort(importances)[::-1]
+        plt.figure(figsize=(8, 6))
+        plt.title("Feature Importance")
+        plt.bar(range(len(importances)), importances[indices], align="center")
+        plt.xticks(range(len(importances)), [f"Feature {i}" for i in indices], rotation=45)
+        plt.tight_layout()
+        plt.show()
 
-# 示例：使用鸢尾花数据集进行训练和评估
+    def plot_pca_results(self, X_test, y_test, y_pred):
+        pca = PCA(n_components=2)
+        X_reduced = pca.fit_transform(X_test)
+
+        plt.figure(figsize=(8, 6))
+        plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=y_pred, cmap='viridis', marker='o', alpha=0.5, label='Predicted')
+        plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=y_test, cmap='coolwarm', marker='x', alpha=0.5, label='True')
+        plt.title("PCA Projection of Predictions vs True Labels")
+        plt.legend()
+        plt.show()
+
+    def plot_confusion_matrix(self, y_true, y_pred, labels):
+        cm = confusion_matrix(y_true, y_pred)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+        disp.plot(cmap=plt.cm.Blues)
+        plt.title("Confusion Matrix")
+        plt.show()
+
+
+# ----------------------------- 示例：使用鸢尾花数据集进行训练和评估 -----------------------------
+
 if __name__ == "__main__":
     # 加载鸢尾花数据集
     iris = datasets.load_iris()
@@ -113,8 +121,6 @@ if __name__ == "__main__":
     # 创建随机森林模型
     random_forest = RandomForestModel(n_estimators=100, max_depth=5)
 
-    # 训练随机森林模型
+    # 训练并评估模型（带可视化）
     random_forest.fit(X_train, y_train)
-
-    # 评估模型
-    random_forest.evaluate(X_test, y_test)
+    random_forest.evaluate(X_test, y_test, target_names=iris.target_names)
